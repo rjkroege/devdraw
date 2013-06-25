@@ -8,72 +8,121 @@
 package main
 
 import (
-	"fmt"
+//	"fmt"
 	"log"
-	"code.google.com/p/goplan9/draw"
-	"image"
+//	"code.google.com/p/goplan9/draw"
+//	"image"
+	"syscall"
+	"code.google.com/p/goplan9/draw/drawfcall"
+	"os"
+	"strings"
+	"sync"
 )
 
-func  watcher() {
-	
-}
 
-/*
- *	Redraws the world. (What world we have.)
- *	This is the "view" code. 
- */
-func redraw(d *draw.Display, resized bool) {
-	if resized {
-		if err := d.Attach(draw.Refmesg); err != nil {
-			log.Fatalf("can't reattach to window: %v", err)
+
+func modifyEnvironment() {
+	envs := os.Environ()
+	os.Clearenv()
+
+	for _, v := range envs {
+		// log.Print("env contents", v)
+		if !strings.HasPrefix(v, "DEVDRAW") {
+			ss := strings.Split(v, "=")
+			// log.Print("env chunks", ss)
+			err := os.Setenv(ss[0], ss[1])
+			if err != nil {
+				log.Fatal("setting env")
+			}
+		} else {
+			log.Print("clearing DEVDRAW from environment")
 		}
 	}
-
-	// draw coloured rects at mouse positions
-	// first param is the clip rectangle. which can be 0. meaning no clip?
-	var clipr image.Rectangle
-	fmt.Printf("empty clip? %v\n", clipr)
-	d.ScreenImage.Draw(clipr, d.White, nil, image.ZP)
-	d.Flush(true)
 }
 
-/*
- *	Reads the mouse channel and does stuff. Like redrawing the screen.
- */
-func mouse() {
-	fmt.Printf("called mouse\n");
+type AppConn struct {
+	w  sync.Mutex
+	o *os.File
+}
+
+func marshalsxtx(inbuffy []byte, appconn *AppConn, devdraw *drawfcall.Conn) {
+	tx := new(drawfcall.Msg)
+	rx := new(drawfcall.Msg)
+
+	tag := inbuffy[4]
+	log.Print("set inbuffy to something, tag ", tag)
+
+	log.Print("bar")
+	err := tx.Unmarshal(inbuffy)
+	log.Print("parsed into a tx: ", tx)
+	if err != nil {
+		log.Fatal("build a msg: ", err)
+	}
+
+	log.Print("foo")
+
+	// Write message to real devdraw and get response.
+	log.Print("sending tx to real devdraw, getting rx back")
+	err = devdraw.RPC(tx, rx)
+	if err != nil {
+		log.Fatal("send/receive to real devdraw: ", err)
+	}
+	log.Print("got rx back: ", rx)
+
+	// write to cout
+	outbuffy := rx.Marshal()
+	log.Print("returned tag ", outbuffy[4])
+	log.Print("changing tag")
+	outbuffy[4] = tag
+	
+	appconn.w.Lock()
+	_, err = appconn.o.Write(outbuffy)
+	appconn.w.Unlock()
+	if err != nil {
+		log.Fatal("write to app: ", err)
+	}		
 }
 
 func main() {
-	fmt.Print("hello from devdraw\n");
-
-	// Make the window.	
-	d, err := draw.Init(nil, "", "experiment1", "")
+	// I assume that in is 0
+	in2, err := syscall.Dup(0)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("dupping 0", err)
 	}
 
-	
-	// make some colors
-	back, _ := d.AllocImage(image.Rect(0,0,1,1), d.ScreenImage.Pix, true, 0xDADBDAff);
+	out2, err  := syscall.Dup(1)
+	if err != nil {
+		log.Fatal("dupping 1", err)
+	}
 
-	fmt.Printf("background colour: %v\n ", back);
+	os.Stdin.Close()
+	os.Stdout.Close()
+	os.Stdout = os.NewFile(uintptr(2), "/dev/stdout")
 
-	// get mouse positions
-	mousectl := d.InitMouse()
-	redraw(d, false);
+	cin := os.NewFile(uintptr(in2), "fromapp")
+	cout := os.NewFile(uintptr(out2), "toapp")
+
+	// TODO(rjkroege): Modify environment here.
+	modifyEnvironment();
+
+	// Fire up a new devdraw here
+	devdraw, err  := drawfcall.New()
+	if err != nil {
+		log.Fatal("making a Conn", err)
+	}
+
+	log.Print("hello")
+	var appconn AppConn
+	appconn.o = cout
 
 	for {
-		select {
-		case <-mousectl.Resize:
-			redraw(d, true)
-		case m := <-mousectl.C:
-			fmt.Printf("mouse field %v buttons %d\n", m, m.Buttons)
-			// TODO(rjkroege): insert code here to do some drawing and stuff.
-			d.ScreenImage.Draw(image.Rect(m.X, m.Y, m.X + 10, m.Y + 10), back, nil, image.ZP)
-			d.Flush(true)
+		// read crap from cin
+		inbuffy, err := drawfcall.ReadMsg(cin)
+		if err != nil {
+			log.Fatal("read from app: ", err)
+			break;
 		}
-	}
 
-	fmt.Print("bye\n")
+		go marshalsxtx(inbuffy, &appconn, devdraw)
+	}
 }
