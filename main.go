@@ -43,7 +43,27 @@ func modifyEnvironment() {
 type AppConn struct {
 	w  sync.Mutex
 	o *os.File
+
+	recordLock sync.Mutex
+	recordFile *os.File
+	
 }
+
+func (a *AppConn) record(m *drawfcall.Msg) {
+	// lock
+	// dump in useful form
+	// stringify the Msg.
+	s := "Message Record\n-----------\n"
+	s += m.String()
+	s += "\n\n"
+	a.recordLock.Lock()
+	_, err := a.recordFile.WriteString(s)
+	a.recordLock.Unlock()
+	if err != nil {
+		log.Fatal("can't write event record: ", err)
+	}
+}
+
 
 func marshalsxtx(inbuffy []byte, appconn *AppConn, devdraw *drawfcall.Conn) {
 	tx := new(drawfcall.Msg)
@@ -55,6 +75,7 @@ func marshalsxtx(inbuffy []byte, appconn *AppConn, devdraw *drawfcall.Conn) {
 	log.Print("bar")
 	err := tx.Unmarshal(inbuffy)
 	log.Print("parsed into a tx: ", tx)
+	appconn.record(tx)
 	if err != nil {
 		log.Fatal("build a msg: ", err)
 	}
@@ -68,6 +89,9 @@ func marshalsxtx(inbuffy []byte, appconn *AppConn, devdraw *drawfcall.Conn) {
 		log.Fatal("send/receive to real devdraw: ", err)
 	}
 	log.Print("got rx back: ", rx)
+
+	// TODO(rjkroege): Time-stamp the records.
+	appconn.record(rx)
 
 	// write to cout
 	outbuffy := rx.Marshal()
@@ -99,10 +123,10 @@ func main() {
 	os.Stdout.Close()
 	os.Stdout = os.NewFile(uintptr(2), "/dev/stdout")
 
+	/* Connections to the application. */
 	cin := os.NewFile(uintptr(in2), "fromapp")
 	cout := os.NewFile(uintptr(out2), "toapp")
 
-	// TODO(rjkroege): Modify environment here.
 	modifyEnvironment();
 
 	// Fire up a new devdraw here
@@ -114,6 +138,16 @@ func main() {
 	log.Print("hello")
 	var appconn AppConn
 	appconn.o = cout
+
+	recordFileName := os.Getenv("DEVDRAW_LISTENER_OUT")
+	if recordFileName == "" {
+		recordFileName = "/tmp/devdraw_listener_out";
+	}
+
+	appconn.recordFile, err = os.Create(recordFileName)
+	if err != nil {
+		log.Fatal("openning record ", err)
+	}
 
 	for {
 		// read crap from cin
