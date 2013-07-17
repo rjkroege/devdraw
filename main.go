@@ -2,6 +2,7 @@
 /*
 
 	A devdraw listener. Maybe I've named this wrong.
+	It's the devdraw interceptor
 
 */
 
@@ -17,10 +18,15 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"io"
 )
 
-
-
+/*
+	Strip DEVDRAW from environment so that the plan9 go code
+	Doesn't invoke the interceptor program recursively.
+	TODO(rjkroege): Note that I might explicitly want to specify which
+	DEVDRAW is to be invoked for real.
+*/
 func modifyEnvironment() {
 	envs := os.Environ()
 	os.Clearenv()
@@ -40,32 +46,20 @@ func modifyEnvironment() {
 	}
 }
 
-type AppConn struct {
+type App struct {
 	w  sync.Mutex
 	o *os.File
-
-	recordLock sync.Mutex
-	recordFile *os.File
-	
+	i *os.File
 }
 
-func (a *AppConn) record(m *drawfcall.Msg) {
-	// lock
-	// dump in useful form
-	// stringify the Msg.
-	s := "Message Record\n-----------\n"
-	s += m.String()
-	s += "\n\n"
-	a.recordLock.Lock()
-	_, err := a.recordFile.WriteString(s)
-	a.recordLock.Unlock()
+func checkedClose(f *os.File, msg string) {
+	err := f.Close()
 	if err != nil {
-		log.Fatal("can't write event record: ", err)
+		log.Fatal(msg, err)
 	}
 }
 
-
-func marshalsxtx(inbuffy []byte, appconn *AppConn, devdraw *drawfcall.Conn) {
+func marshalsxtx(inbuffy []byte, app *App, devdraw *drawfcall.Conn, json *JsonRecorder) {
 	tx := new(drawfcall.Msg)
 	rx := new(drawfcall.Msg)
 
@@ -74,38 +68,44 @@ func marshalsxtx(inbuffy []byte, appconn *AppConn, devdraw *drawfcall.Conn) {
 
 	log.Print("bar")
 	err := tx.Unmarshal(inbuffy)
-	log.Print("parsed into a tx: ", tx)
-	appconn.record(tx)
+	json.Record(tx, tag)
 	if err != nil {
 		log.Fatal("build a msg: ", err)
 	}
-
-	log.Print("foo")
 
 	// Write message to real devdraw and get response.
 	log.Print("sending tx to real devdraw, getting rx back")
 	err = devdraw.RPC(tx, rx)
 	if err != nil {
-		log.Fatal("send/receive to real devdraw: ", err)
+		if err != io.EOF {
+			log.Print("send/receive to real devdraw had error: ", err)
+		}
+		app.w.Lock()
+		checkedClose(app.o, "couldn't close channel to host: ")		
+		app.w.Unlock()
+		checkedClose(app.i, "Couldn't close channel from host: ")
+		return
 	}
-	log.Print("got rx back: ", rx)
 
 	// TODO(rjkroege): Time-stamp the records.
-	appconn.record(rx)
+	// TODO(rjkroege): I want the actual original tag.
+	json.Record(rx, tag)
 
 	// write to cout
 	outbuffy := rx.Marshal()
-	log.Print("returned tag ", outbuffy[4])
-	log.Print("changing tag")
+	// log.Print("returned tag ", outbuffy[4])
+	// log.Print("changing tag")
 	outbuffy[4] = tag
 	
-	appconn.w.Lock()
-	_, err = appconn.o.Write(outbuffy)
-	appconn.w.Unlock()
+	app.w.Lock()
+	_, err = app.o.Write(outbuffy)
+	app.w.Unlock()
 	if err != nil {
 		log.Fatal("write to app: ", err)
 	}		
 }
+
+
 
 func main() {
 	// I assume that in is 0
@@ -135,28 +135,26 @@ func main() {
 		log.Fatal("making a Conn", err)
 	}
 
-	log.Print("hello")
-	var appconn AppConn
-	appconn.o = cout
-
-	recordFileName := os.Getenv("DEVDRAW_LISTENER_OUT")
-	if recordFileName == "" {
-		recordFileName = "/tmp/devdraw_listener_out";
-	}
-
-	appconn.recordFile, err = os.Create(recordFileName)
-	if err != nil {
-		log.Fatal("openning record ", err)
-	}
+	// There is probably a nicer way to do this.
+	// TODO(rjkroege): do it the nicer way.
+	 var app App;
+	app.o = cout
+	app.i = cin
+	
+	json := NewJsonRecorder()
 
 	for {
 		// read crap from cin
+		log.Print("about to read from host")
 		inbuffy, err := drawfcall.ReadMsg(cin)
+		log.Print("read from host")
 		if err != nil {
-			log.Fatal("read from app: ", err)
+			devdraw.Close()
 			break;
 		}
-
-		go marshalsxtx(inbuffy, &appconn, devdraw)
+		go marshalsxtx(inbuffy, &app, devdraw, json)
 	}
+
+	log.Print("waiting on completion")		
+	json.WaitToComplete()
 }
