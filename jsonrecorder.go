@@ -14,7 +14,7 @@
 package main
 
 import (
-	"fmt"
+//	"fmt"
 	"log"
 //	"code.google.com/p/goplan9/draw"
 //	"image"
@@ -24,13 +24,13 @@ import (
 //	"strings"
 //	"sync"
 	"io"
+	"encoding/json"
 )
 
 type JsonRecorder struct {
-	c chan string
+	c chan *drawfcall.Msg
 	complete chan int
 }
-
 
 /*
 	I need a type that corresponds to the JSON record.
@@ -38,17 +38,19 @@ type JsonRecorder struct {
 	in some way.
 */
 func NewJsonRecorder() *JsonRecorder {
-	c := make(chan string, 4)
+	c := make(chan *drawfcall.Msg, 4)
 	complete := make(chan int)
-	json := &JsonRecorder{c, complete}
-	go json.continuouslyWriteJson()
-	return json
+	jlog := &JsonRecorder{c, complete}
+	go jlog.continuouslyWriteJson()
+	return jlog
 }
+
 
 func (jr *JsonRecorder) WaitToComplete() {
 	close(jr.c)
 	<-jr.complete
 }
+
 
 /*
 	Copies the given devdraw protocol message (on thread) and
@@ -60,18 +62,17 @@ func (jr *JsonRecorder) WaitToComplete() {
 	TODO(rjkroege): do the JSON stuff.
 */
 func (jlog *JsonRecorder) Record(msg *drawfcall.Msg, tag byte) {
-	s := msg.String()
-	s += ", "
-	// How do I add a string thing of an int?
-	s +=  fmt.Sprintf("tag: %d", tag)
-	jlog.c <- s
+	m := *msg;
+	m.Tag = tag;
+	jlog.c <- &m
 }
+
 
 /*
 	Write a message to complete once all messages have been
 	encoded and written.
 */
-func (json *JsonRecorder) continuouslyWriteJson() {
+func (jlog *JsonRecorder) continuouslyWriteJson() {
 	filename := os.Getenv("DEVDRAW_LISTENER_OUT")
 	if filename == "" {
 		filename = "/tmp/devdraw_listener_out";
@@ -81,16 +82,16 @@ func (json *JsonRecorder) continuouslyWriteJson() {
 		log.Fatal("openning record ", err)
 	}
 	// TODO(rjkroege): Need to sort this out once I have the flow working.
-	// enc := json.NewEncoder(fd);
+	 enc := json.NewEncoder(fd);
 
 	separator := ""
 
 	io.WriteString(fd, "[\n")
-	for r := range json.c {
+	for r := range jlog.c {
 		io.WriteString(fd, separator)
 		// need to make this better...
-		// err := enc.Encode(r); 
-		io.WriteString(fd, r)
+		err := enc.Encode(PrettyJsonOutput(r)); 
+		// io.WriteString(fd, r)
 		if err != nil {
 			log.Fatal("couldn't write the JSON record\n")
 		}
@@ -104,5 +105,5 @@ func (json *JsonRecorder) continuouslyWriteJson() {
 		log.Fatal("couldn't close file\n")
 	}	
 
-	json.complete <- 1
+	jlog.complete <- 1
 }
