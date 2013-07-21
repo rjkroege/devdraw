@@ -21,85 +21,112 @@ import (
 //	"encoding/json"
 )
 
-type JsonedMsg struct {
-	Type string				`json:",omitempty"`
-	Tag uint8				`json:",omitempty"`
-	Mouse drawfcall.Mouse	`json:",omitempty"`
-	Resized bool				`json:",omitempty"`
-	Cursor  drawfcall.Cursor	`json:",omitempty"`
-	Arrow   bool				`json:",omitempty"`
-	Rune    rune				`json:",omitempty"`
-	Winsize string			`json:",omitempty"`
-	Label   string				`json:",omitempty"`
-	Snarf   string				`json:",omitempty"`
-	Error   string				`json:",omitempty"`
-	// TODO(rjkroege): do I need to care about this?
-	// Data    []byte
-	Count   int				`json:",omitempty"`
-	Rect    image.Rectangle		`json:",omitempty"`
+type JsonedMsgCore struct {
+	Tag uint8
+	Type string
 }
 
-func PrettyJsonOutput(m* drawfcall.Msg) (*JsonedMsg) {
-	var j *JsonedMsg
+type JsonedMsgMouse struct {
+	JsonedMsgCore
+	Mouse drawfcall.Mouse
+}
+
+type JsonedMsgCursor struct {
+	JsonedMsgCore
+	Cursor  drawfcall.Cursor
+	Arrow   bool
+}
+
+type JsonedMsgLabel struct {
+	JsonedMsgCore
+	Label   string
+}
+
+type JsonTinit struct {
+	JsonedMsgCore
+	Label   string
+	Winsize string
+}
+
+type JsonRrdkbd struct {
+	JsonedMsgCore
+	Rune    rune
+}
+
+type JsonSnarf struct {
+	JsonedMsgCore
+	Snarf   string
+}
+
+type JsonDrawCount struct {
+	JsonedMsgCore
+	Count   int
+}
+
+type JsonResize struct {
+	JsonedMsgCore
+	Rect    image.Rectangle
+}
+
+func PrettyJsonOutput(m* drawfcall.Msg) (interface{}) {
 	switch m.Type {
 	default:
-		j = &JsonedMsg{Tag: m.Tag, Type: "unknown"}
+		return &JsonedMsgCore{m.Tag, "unknown"}
 	case drawfcall.Rerror:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Rerror"}
+		return &JsonedMsgCore{m.Tag, "Rerror"}
 	case drawfcall.Trdmouse:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Trdmouse"}
+		return&JsonedMsgCore{m.Tag, "Trdmouse"}
 	case drawfcall.Rrdmouse:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Rrdmouse", Mouse: m.Mouse}
+		return &JsonedMsgMouse{JsonedMsgCore{m.Tag,  "Rrdmouse"},  m.Mouse}
 	case drawfcall.Tbouncemouse:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Tbouncemouse", Mouse: m.Mouse}
+		return &JsonedMsgMouse{JsonedMsgCore{m.Tag, "Tbouncemouse"}, m.Mouse}
 	case drawfcall.Rbouncemouse:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Rbouncemouse"}
+		return &JsonedMsgCore{m.Tag, "Rbouncemouse"}
 	case drawfcall.Tmoveto:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Tmoveto", Mouse: m.Mouse}
+		return &JsonedMsgMouse{JsonedMsgCore{m.Tag, "Tmoveto"}, m.Mouse}
 	case drawfcall.Rmoveto:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Rmoveto"}
+		return &JsonedMsgCore{m.Tag, "Rmoveto"}
 	case drawfcall.Tcursor:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Tcursor", Arrow: m.Arrow}
+		return &JsonedMsgCursor{JsonedMsgCore{m.Tag, "Tcursor"}, m.Cursor, m.Arrow}
 	case drawfcall.Rcursor:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Rcursor"}
+		return &JsonedMsgCore{m.Tag, "Rcursor"}
 	case drawfcall.Trdkbd:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Trdkbd"}
+		return &JsonedMsgCore{m.Tag, "Trdkbd"}
 	case drawfcall.Rrdkbd:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Rrdkbd", Rune: m.Rune}
+		return &JsonRrdkbd{JsonedMsgCore{m.Tag, "Rrdkbd"}, m.Rune}
 	case drawfcall.Tlabel:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Tlabel", Label: m.Label}
+		return &JsonedMsgLabel{JsonedMsgCore{m.Tag, "Tlabel"}, m.Label}
 	case drawfcall.Rlabel:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Rlabel"}
+		return &JsonedMsgCore{m.Tag, "Rlabel"}
 	case drawfcall.Tinit:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Tinit", Label: m.Label, Winsize: m.Winsize}
+		return &JsonTinit{JsonedMsgCore{m.Tag, "Tinit"}, m.Label, m.Winsize}
 	case drawfcall.Rinit:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Rinit"}
+		return &JsonedMsgCore{m.Tag, "Rinit"}
 	case drawfcall.Trdsnarf:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Trdsnarf"}
+		return &JsonedMsgCore{m.Tag, "Trdsnarf"}
 	case drawfcall.Rrdsnarf:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Rrdsnarf", Snarf: m.Snarf}
+		return &JsonSnarf{JsonedMsgCore{m.Tag, "Rrdsnarf"}, m.Snarf}
 	case drawfcall.Twrsnarf:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Twrsnarf", Snarf: m.Snarf}
+		return &JsonSnarf{JsonedMsgCore{m.Tag, "Twrsnarf"}, m.Snarf}
 	case drawfcall.Rwrsnarf:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Rwrsnarf"}
+		return &JsonedMsgCore{m.Tag, "Rwrsnarf"}
 	case drawfcall.Trddraw:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Trddraw", Count: m.Count}
+		return &JsonDrawCount{JsonedMsgCore{m.Tag, "Trddraw"}, m.Count}
 	case drawfcall.Rrddraw:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Rrddraw - need data", }
+		return &JsonedMsgCore{m.Tag, "Rrddraw - expand data", }
 	case drawfcall.Twrdraw:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Twrdraw - need data", }
+		return &JsonedMsgCore{m.Tag, "Twrdraw - expand data", }
 	case drawfcall.Rwrdraw:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Rwrdraw", Count: m.Count}
+		return &JsonDrawCount{JsonedMsgCore{m.Tag, "Rwrdraw"}, m.Count}
 	case drawfcall.Ttop:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Ttop"}
+		return &JsonedMsgCore{m.Tag, "Ttop"}
 	case drawfcall.Rtop:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Rtop"}
+		return &JsonedMsgCore{m.Tag, "Rtop"}
 	case drawfcall.Tresize:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Tresize", Rect: m.Rect}
+		return &JsonResize{JsonedMsgCore{m.Tag, "Tresize"}, m.Rect}
 	case drawfcall.Rresize:
-		j = &JsonedMsg{Tag: m.Tag, Type: "Rresize"}
+		return &JsonedMsgCore{m.Tag, "Rresize"}
 	}
-	return j
 }
 
 // TODO(rjkroege):
