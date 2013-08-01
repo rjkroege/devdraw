@@ -81,7 +81,6 @@ func (jlog *JsonRecorder) continuouslyWriteJson() {
 	if err != nil {
 		log.Fatal("openning record ", err)
 	}
-	// TODO(rjkroege): Need to sort this out once I have the flow working.
 	 enc := json.NewEncoder(fd);
 
 	separator := ""
