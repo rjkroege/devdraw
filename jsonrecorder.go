@@ -74,8 +74,12 @@ func (jlog *JsonRecorder) Record(msg *drawfcall.Msg, tag byte) {
 */
 func (jlog *JsonRecorder) continuouslyWriteJson() {
 	filename := os.Getenv("DEVDRAW_LISTENER_OUT")
+
+	// TODO(rjkroege): Read this from environment.
+	pretty_printed := true
+
 	if filename == "" {
-		filename = "/tmp/devdraw_listener_out";
+		filename = "/tmp/devdraw_listener_out.html";
 	}
 	fd , err := os.Create(filename)
 	if err != nil {
@@ -84,6 +88,11 @@ func (jlog *JsonRecorder) continuouslyWriteJson() {
 	 enc := json.NewEncoder(fd);
 
 	separator := ""
+
+	if pretty_printed {
+		io.WriteString(fd, visualizer_prefx)
+		io.WriteString(fd, "obj =" )
+	}
 
 	io.WriteString(fd, "[\n")
 	for r := range jlog.c {
@@ -96,7 +105,11 @@ func (jlog *JsonRecorder) continuouslyWriteJson() {
 		}
 		separator = ",\n"
 	}
-	io.WriteString(fd, "\n]\n")
+	io.WriteString(fd, "\n];\n")
+
+	if pretty_printed {
+		io.WriteString(fd, visualizer_suffix)
+	}
 
 	// TODO(rjkroege): use defer for this.
 	err = fd.Close()
