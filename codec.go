@@ -109,6 +109,23 @@ type DrawOp struct {
 	Op string
 }
 
+type DrawString struct {
+	DrawType
+	DstID uint32
+	SrcID uint32
+	FontImageID uint32
+	OriginPt image.Point
+	ClipRect image.Rectangle
+	SrcPt image.Point
+	Glyphs []uint16		/* These are not characters. */
+}
+
+type DrawStringBg struct {
+	DrawString
+	BgID uint32
+	BgPt image.Point
+}
+
 type DrawCmd interface {
 	Type() string;
 }
@@ -281,13 +298,46 @@ func CreateDrawData(tag uint8, a []byte) (interface{}) {
 		/* string: 's' dstid[4] srcid[4] fontid[4] P[2*4] clipr[4*4] sp[2*4] ni[2] ni*(index[2]) */
 		/* stringbg: 'x' dstid[4] srcid[4] fontid[4] P[2*4] clipr[4*4] sp[2*4] ni[2] bgid[4] bgpt[2*4] ni*(index[2]) */
 		case 's', 'x':
-			jd.Cmds = append(jd.Cmds, &DrawType{ string(t) })
 			m := 1+4+4+4+2*4+4*4+2*4+2
-			if a[0] == 'x' {
-				m += 4+2*4
-			}
+			mx := 0
 			ni := int(binary.LittleEndian.Uint16(a[45:]))
-			m += ni * 2
+			if a[0] == 'x' {
+				mx = 4+2*4
+			}
+			glyphs := make([]uint16, 0, ni)
+			for i, b := 0, a[m+mx:]; i < ni; i++ {
+				glyphs = append(glyphs, binary.LittleEndian.Uint16(b[i:]))
+			}
+
+			s := DrawString{ DrawType{string(a[0])},
+				binary.LittleEndian.Uint32(a[1:]),
+				binary.LittleEndian.Uint32(a[5:]),
+				binary.LittleEndian.Uint32(a[9:]),
+				image.Point{
+					int(binary.LittleEndian.Uint32(a[13:])),
+					int(binary.LittleEndian.Uint32(a[17:])) },
+				image.Rectangle{
+					image.Point{
+						int(binary.LittleEndian.Uint32(a[21:])),
+						int(binary.LittleEndian.Uint32(a[25:])) },
+					image.Point{
+						int(binary.LittleEndian.Uint32(a[29:])),
+						int(binary.LittleEndian.Uint32(a[33:])) }},
+				image.Point{
+					int(binary.LittleEndian.Uint32(a[37:])),
+					int(binary.LittleEndian.Uint32(a[41:])) },
+				glyphs }
+			if a[0] == 'x' {
+				b := a[m:]
+				jd.Cmds = append(jd.Cmds, &DrawStringBg{s,
+					binary.LittleEndian.Uint32(b),
+					image.Point{
+						int(binary.LittleEndian.Uint32(b[4:])),
+						int(binary.LittleEndian.Uint32(b[8:])) } })
+			} else {
+				jd.Cmds = append(jd.Cmds, &s)
+			}
+			m += ni * 2 + mx
 		     a = a[m:]
 
 		/* use public screen: 'S' id[4] chan[4] */
