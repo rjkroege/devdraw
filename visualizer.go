@@ -6,9 +6,7 @@
 package main
 
 const (
-
-visualizer_prefx = 
-`<html>
+	visualizer_prefx = `<html>
 <head>
 	<style type="text/css">
 pre {outline: 1px solid #ccc; padding: 5px; margin: 5px; }
@@ -50,12 +48,10 @@ function syntaxHighlight(json) {
 	<script language="JavaScript" type="text/javascript">
 `
 
-visualizer_suffix =
-`
+	visualizer_suffix = `
 </script>
 </head>
 <body onload="output(syntaxHighlight(JSON.stringify(obj, undefined, 4)));"></body>
 </html>
 `
-
 )

@@ -1,4 +1,3 @@
-
 /*
 	Package to encapsulate the writing (and reading) (and comparison)
 	of JSON records.
@@ -14,21 +13,21 @@
 package main
 
 import (
-//	"fmt"
+	//	"fmt"
 	"log"
-//	"code.google.com/p/goplan9/draw"
-//	"image"
-//	"syscall"
-	"code.google.com/p/goplan9/draw/drawfcall"
+	//	"code.google.com/p/goplan9/draw"
+	//	"image"
+	//	"syscall"
+	"9fans.net/go/draw/drawfcall"
 	"os"
-//	"strings"
-//	"sync"
-	"io"
+	//	"strings"
+	//	"sync"
 	"encoding/json"
+	"io"
 )
 
 type JsonRecorder struct {
-	c chan *drawfcall.Msg
+	c        chan *drawfcall.Msg
 	complete chan int
 }
 
@@ -45,12 +44,10 @@ func NewJsonRecorder() *JsonRecorder {
 	return jlog
 }
 
-
 func (jr *JsonRecorder) WaitToComplete() {
 	close(jr.c)
 	<-jr.complete
 }
-
 
 /*
 	Copies the given devdraw protocol message (on thread) and
@@ -62,11 +59,10 @@ func (jr *JsonRecorder) WaitToComplete() {
 	TODO(rjkroege): do the JSON stuff.
 */
 func (jlog *JsonRecorder) Record(msg *drawfcall.Msg, tag byte) {
-	m := *msg;
-	m.Tag = tag;
+	m := *msg
+	m.Tag = tag
 	jlog.c <- &m
 }
-
 
 /*
 	Write a message to complete once all messages have been
@@ -79,26 +75,26 @@ func (jlog *JsonRecorder) continuouslyWriteJson() {
 	pretty_printed := true
 
 	if filename == "" {
-		filename = "/tmp/devdraw_listener_out.html";
+		filename = "/tmp/devdraw_listener_out.html"
 	}
-	fd , err := os.Create(filename)
+	fd, err := os.Create(filename)
 	if err != nil {
 		log.Fatal("openning record ", err)
 	}
-	 enc := json.NewEncoder(fd);
+	enc := json.NewEncoder(fd)
 
 	separator := ""
 
 	if pretty_printed {
 		io.WriteString(fd, visualizer_prefx)
-		io.WriteString(fd, "obj =" )
+		io.WriteString(fd, "obj =")
 	}
 
 	io.WriteString(fd, "[\n")
 	for r := range jlog.c {
 		io.WriteString(fd, separator)
 		// need to make this better...
-		err := enc.Encode(PrettyJsonOutput(r)); 
+		err := enc.Encode(PrettyJsonOutput(r))
 		// io.WriteString(fd, r)
 		if err != nil {
 			log.Fatal("couldn't write the JSON record\n")
@@ -115,7 +111,7 @@ func (jlog *JsonRecorder) continuouslyWriteJson() {
 	err = fd.Close()
 	if err != nil {
 		log.Fatal("couldn't close file\n")
-	}	
+	}
 
 	jlog.complete <- 1
 }

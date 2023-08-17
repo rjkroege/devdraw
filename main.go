@@ -1,4 +1,3 @@
-
 /*
 
 	A devdraw listener. Maybe I've named this wrong.
@@ -9,16 +8,16 @@
 package main
 
 import (
-//	"fmt"
+	//	"fmt"
 	"log"
-//	"code.google.com/p/goplan9/draw"
-//	"image"
-	"syscall"
-	"code.google.com/p/goplan9/draw/drawfcall"
+	//	"code.google.com/p/goplan9/draw"
+	//	"image"
+	"9fans.net/go/draw/drawfcall"
+	"io"
 	"os"
 	"strings"
 	"sync"
-	"io"
+	"syscall"
 )
 
 /*
@@ -47,7 +46,7 @@ func modifyEnvironment() {
 }
 
 type App struct {
-	w  sync.Mutex
+	w sync.Mutex
 	o *os.File
 	i *os.File
 }
@@ -81,7 +80,7 @@ func marshalsxtx(inbuffy []byte, app *App, devdraw *drawfcall.Conn, json *JsonRe
 			log.Print("send/receive to real devdraw had error: ", err)
 		}
 		app.w.Lock()
-		checkedClose(app.o, "couldn't close channel to host: ")		
+		checkedClose(app.o, "couldn't close channel to host: ")
 		app.w.Unlock()
 		checkedClose(app.i, "Couldn't close channel from host: ")
 		return
@@ -96,16 +95,14 @@ func marshalsxtx(inbuffy []byte, app *App, devdraw *drawfcall.Conn, json *JsonRe
 	// log.Print("returned tag ", outbuffy[4])
 	// log.Print("changing tag")
 	outbuffy[4] = tag
-	
+
 	app.w.Lock()
 	_, err = app.o.Write(outbuffy)
 	app.w.Unlock()
 	if err != nil {
 		log.Fatal("write to app: ", err)
-	}		
+	}
 }
-
-
 
 func main() {
 	// I assume that in is 0
@@ -114,7 +111,7 @@ func main() {
 		log.Fatal("dupping 0", err)
 	}
 
-	out2, err  := syscall.Dup(1)
+	out2, err := syscall.Dup(1)
 	if err != nil {
 		log.Fatal("dupping 1", err)
 	}
@@ -127,20 +124,20 @@ func main() {
 	cin := os.NewFile(uintptr(in2), "fromapp")
 	cout := os.NewFile(uintptr(out2), "toapp")
 
-	modifyEnvironment();
+	modifyEnvironment()
 
 	// Fire up a new devdraw here
-	devdraw, err  := drawfcall.New()
+	devdraw, err := drawfcall.New()
 	if err != nil {
 		log.Fatal("making a Conn", err)
 	}
 
 	// There is probably a nicer way to do this.
 	// TODO(rjkroege): do it the nicer way.
-	 var app App;
+	var app App
 	app.o = cout
 	app.i = cin
-	
+
 	json := NewJsonRecorder()
 
 	for {
@@ -150,11 +147,11 @@ func main() {
 		log.Print("read from host")
 		if err != nil {
 			devdraw.Close()
-			break;
+			break
 		}
 		go marshalsxtx(inbuffy, &app, devdraw, json)
 	}
 
-	log.Print("waiting on completion")		
+	log.Print("waiting on completion")
 	json.WaitToComplete()
 }
