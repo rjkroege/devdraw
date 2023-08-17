@@ -6,3 +6,5 @@ At some point during the course of developing [rjkroege/edwood: Go version of Pl
 like a large enough project that I wanted to have some incremental milestones. The first such
 milestone was an *interposer* `devdraw` that recorded the `devdraw` protocol to a file while delegating the implementation to the original `devdraw`.
 
+# Status
+Sort of works as an interposer. Project is currently on hold.
